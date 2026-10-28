@@ -1,7 +1,7 @@
 {
   "name": "summary-api",
   "version": "1.0.0",
-  "description": "Цифровая визитка Михаила Склярова — GraphQL API на NestJS + Prisma + PostgreSQL",
+  "description": "Возьмите меня в команду :)",
   "private": true,
   "scripts": {
     "build": "nest build",
