@@ -1,0 +1,186 @@
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+/**
+ * Сервис автоматической инициализации данных.
+ *
+ * Выполняется при каждом старте приложения.
+ * Использует upsert — идемпотентен, безопасно запускать повторно.
+ *
+ * Выбор подхода: встроенный seed вместо отдельного CLI-скрипта
+ * упрощает Docker-сетап — нет нужды в дополнительных шагах entrypoint.
+ * При желании можно вынести в отдельную команду (точка роста).
+ */
+@Injectable()
+export class SeedService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(SeedService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async onApplicationBootstrap() {
+    const exists = await this.prisma.profile.findFirst({ select: { id: true } });
+    if (exists) {
+      this.logger.log('БД уже содержит данные — пропускаем seed.');
+      return;
+    }
+
+    this.logger.log('Заполняем БД начальными данными...');
+    await this.seed();
+    this.logger.log('✅ Seed выполнен успешно.');
+  }
+
+  private async seed() {
+    await this.prisma.profile.create({
+      data: {
+        id: 'main',
+        name: 'Михаил Скляров',
+        description:
+          'Восемь лет в разработке, последние четыре — в банковском продукте с реальными нагрузками. ' +
+          'Работаю над 30+ сервисами в микрофронтовом приложении крупнейшего российского банка для сотрудников выездного канала в роли лид-разработчика. ' +
+          'Занимаюсь не только бизнес-задачами, но и аналитикой, оптимизацией, инфраструктурными доработками, составлением технических целей. ' +
+          'Пишу код, за который не стыдно. Грамотно балансирую между «Бизнес первичен, технологии вторичны» и «Сделай из *** и палок — будет бизнесу подарок».',
+        email: 'm.sklyarovv@gmail.com',
+        phone: '+7 999 696-20-32',
+        telegram: '@msklyarovv',
+        links: {
+          create: [
+            { label: 'GitHub', url: 'https://github.com/msklyarovv' },
+            { label: 'Habr', url: 'https://habr.com/ru/users/msklyarovv' },
+            { label: 'Telegram', url: 'https://t.me/msklyarovv' },
+          ],
+        },
+        skills: {
+          create: [
+            { name: 'JavaScript', category: 'Frontend' },
+            { name: 'TypeScript', category: 'Frontend' },
+            { name: 'React', category: 'Frontend' },
+            { name: 'Next.js', category: 'Frontend' },
+            { name: 'Gatsby', category: 'Frontend' },
+            { name: 'Vue', category: 'Frontend' },
+            { name: 'Redux / Redux Toolkit / Redux-Saga', category: 'Frontend' },
+            { name: 'Styled Components', category: 'Frontend' },
+            { name: 'Material UI', category: 'Frontend' },
+            { name: 'HTML5 / CSS3 / SASS', category: 'Frontend' },
+            { name: 'React Native', category: 'Mobile' },
+            { name: 'Expo', category: 'Mobile' },
+            { name: 'PWA', category: 'Mobile' },
+            { name: 'Node.js', category: 'Backend' },
+            { name: 'Express', category: 'Backend' },
+            { name: 'NestJS', category: 'Backend' },
+            { name: 'GraphQL', category: 'Backend' },
+            { name: 'PostgreSQL', category: 'Backend' },
+            { name: 'MySQL', category: 'Backend' },
+            { name: 'Prisma', category: 'Backend' },
+            { name: 'Docker', category: 'DevOps' },
+            { name: 'Kubernetes', category: 'DevOps' },
+            { name: 'Nginx', category: 'DevOps' },
+            { name: 'GitLab CI', category: 'DevOps' },
+            { name: 'Jenkins', category: 'DevOps' },
+            { name: 'Git / BitBucket', category: 'DevOps' },
+            { name: 'Jest', category: 'Testing' },
+            { name: 'Cypress', category: 'Testing' },
+            { name: 'Storybook', category: 'Testing' },
+            { name: 'Grafana', category: 'Monitoring' },
+            { name: 'Sentry', category: 'Monitoring' },
+            { name: 'Apache Superset', category: 'Monitoring' },
+            { name: 'Keycloak', category: 'Security' },
+            { name: 'OWASP Top 10', category: 'Security' },
+            { name: 'BurpSuite', category: 'Security' },
+          ],
+        },
+        experience: {
+          create: [
+            {
+              order: 0,
+              company: 'Альфа-Банк (вендор: АО «Белл Интегратор»)',
+              position: 'Lead Frontend Developer',
+              startDate: new Date('2022-09-01'),
+              endDate: null,
+              stack: ['React', 'TypeScript', 'Redux Toolkit', 'Keycloak', 'Apache Superset', 'Grafana', 'Sentry', 'Kubernetes', 'PWA', 'Jest', 'Cypress', 'GitLab CI'],
+              achievements: [
+                'Разрабатываю и поддерживаю микрофронтовое приложение: 30+ независимых сервисов, тысячи активных пользователей ежедневно.',
+                'Переработал систему авторизации, интегрировал Keycloak; закрыл 15+ критических уязвимостей, выявленных при аудите.',
+                'Построил аналитическую платформу на Apache Superset с нуля: 10+ дашбордов, 100+ чартов.',
+                'Реализовал встраиваемый сервис ЭДО для 5 000+ сотрудников.',
+                'Запустил 10+ новых сервисов под новые направления дирекции.',
+                'Переработал 30+ сервисов при переходе на обновлённый kit компонентов.',
+                'Выстроил процесс покрытия тестами с автоматическим ревью coverage.',
+                'Интегрировал Grafana и Sentry во все модули — диагностика production-инцидентов ускорилась.',
+                'Перевёл все модули на ConfigMap при миграции с Mesos на Kubernetes: время поставки сократилось на 8%.',
+                'Решил проблему ошибок загрузки chunk`ов после релизов через Rolling Update.',
+                'Инициировал и реализовал переход на PWA для неподдерживаемых устройств.',
+                'Оптимизировал загрузку страниц: lazy load, анализ bundle, устранение критических путей рендеринга.',
+              ],
+            },
+            {
+              order: 1,
+              company: 'SberDevices (ТК РФ: ООО «СалютДевайсы»)',
+              position: 'Senior Frontend Developer',
+              startDate: new Date('2022-09-01'),
+              endDate: new Date('2025-03-01'),
+              stack: ['React', 'TypeScript', 'Next.js', 'Gatsby', 'Node.js', 'Express', 'Redux', 'Storybook', 'Jest', 'Cypress', 'Sentry', 'CDN', 'PostgreSQL', 'GitLab CI'],
+              achievements: [
+                'Полностью переработал портал поддержки: системы обратной связи, формы взаимодействия с клиентами.',
+                'Разработал систему динамических полей — формы и страницы настраиваются через админ-панель. Результат: ~40 часов/месяц освободилось у команды.',
+                'Подключил Sentry, снизил количество production-ошибок на 20%.',
+                'Настроил CDN: снизил нагрузку на серверы, ускорил загрузку страниц.',
+                'Coverage: e2e и компонентное тестирование до 80%+ в портале, с 30% до 70% по branch в магазине.',
+                'Перевёл магазин с Gatsby на Next.js, полностью переработал legacy-код.',
+                'Настроил переход на новую систему эквайринга.',
+                'Разработал библиотеку компонентов с покрытием тестами и Storybook.',
+                'Интегрировал 10+ вендорных решений, в том числе сложную систему чат-ботов.',
+                'Наладил scrum-процесс, выстроил работу с техдолгом.',
+              ],
+            },
+            {
+              order: 2,
+              company: 'ООО «Дунайс» (аутстафф)',
+              position: 'Fullstack Developer',
+              startDate: new Date('2021-04-01'),
+              endDate: new Date('2022-08-01'),
+              stack: ['React Native', 'React', 'Node.js', 'Express', 'NestJS', 'PostgreSQL', 'TypeScript', 'Active Directory'],
+              achievements: [
+                'Wagoonmaster: мобильное приложение для крупнейшей ЖД-логистической компании СНГ. Интеграция со сканерами, ролевая модель на AD, метрики по 90%+ действий, портал координаторов.',
+                'Safe Workplace (Amazon): каркас приложения, анонимные отчёты с геолокацией, NLP-чат-бот, система динамических полей, admin panel.',
+              ],
+            },
+          ],
+        },
+        projects: {
+          create: [
+            {
+              name: 'Alfa-Bank Mobile Platform',
+              description: 'Микрофронтовое приложение для 5 000+ сотрудников выездного канала Альфа-Банка. 30+ сервисов, Kubernetes, Keycloak, Apache Superset.',
+              url: null,
+            },
+            {
+              name: 'SberDevices Support Portal',
+              description: 'Переработанный портал поддержки пользователей. Система динамических полей, интеграция чат-ботов, 80%+ test coverage.',
+              url: null,
+            },
+            {
+              name: 'SberDevices E-commerce',
+              description: 'Миграция интернет-магазина с Gatsby на Next.js, 10+ лендингов. CDN-оптимизация, новая система эквайринга, библиотека компонентов.',
+              url: null,
+            },
+            {
+              name: 'Wagoonmaster',
+              description: 'React Native приложение для ЖД-логистики. Интеграция со сканерами, ролевая модель на Active Directory, сбор метрик.',
+              url: null,
+            },
+            {
+              name: 'Safe Workplace (Amazon)',
+              description: 'Приложение для сотрудников складов Amazon. Анонимные отчёты с геолокацией, NLP-чат-бот, система динамических полей.',
+              url: null,
+            },
+            {
+              name: 'summary-api',
+              description: 'Цифровая визитка: NestJS + GraphQL + Prisma + Docker.',
+              url: 'https://github.com/msklyarovv/summary-api',
+            },
+          ],
+        },
+      },
+    });
+  }
+}

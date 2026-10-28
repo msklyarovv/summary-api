@@ -1,0 +1,31 @@
+# Зависимости
+node_modules/
+
+# Сборка
+dist/
+build/
+
+# Окружение
+.env
+.env.local
+.env.production
+
+# Prisma
+prisma/migrations/*/migration.sql
+
+# Редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
+npm-debug.log*
+
+# Тесты
+coverage/
