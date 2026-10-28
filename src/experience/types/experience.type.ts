@@ -1,5 +1,4 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
-import { DateTimeScalar } from '../../common/scalars/date.scalar';
 
 @ObjectType()
 export class Experience {
@@ -12,10 +11,11 @@ export class Experience {
   @Field()
   position: string;
 
-  @Field(() => DateTimeScalar)
+  /** Скаляр DateTime — зарегистрирован в AppModule через DateTimeScalar */
+  @Field(() => Date)
   startDate: Date;
 
-  @Field(() => DateTimeScalar, { nullable: true })
+  @Field(() => Date, { nullable: true })
   endDate?: Date | null;
 
   @Field(() => [String])
