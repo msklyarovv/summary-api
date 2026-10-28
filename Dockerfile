@@ -14,7 +14,7 @@ COPY tsconfig.json nest-cli.json ./
 COPY src ./src/
 
 RUN npx prisma generate
-RUN npm run build
+RUN npm run build && test -f dist/main.js
 
 # ─── Этап 2: production-образ ─────────────────────────────────────────────────
 FROM node:20-alpine AS runner
