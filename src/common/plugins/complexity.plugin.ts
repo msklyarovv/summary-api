@@ -9,17 +9,6 @@ import {
 } from 'graphql-query-complexity';
 import { ConfigService } from '@nestjs/config';
 
-/**
- * Плагин ограничивает сложность GraphQL-запросов.
- *
- * Это защищает от дорогостоящих запросов, которые могут перегрузить БД.
- * Порог задаётся через переменную окружения GRAPHQL_MAX_COMPLEXITY.
- *
- * Точка роста (для обсуждения):
- * — Сделать бюджет динамическим: разные лимиты для разных клиентов / API-ключей.
- * — Добавить логирование сложности в Grafana для анализа трендов.
- * — Кастомные estimator-ы для полей с тяжёлой бизнес-логикой.
- */
 @Plugin()
 export class ComplexityPlugin implements ApolloServerPlugin {
   private readonly maxComplexity: number;

@@ -42,7 +42,6 @@ import { ComplexityPlugin } from './common/plugins/complexity.plugin';
         plugins: [ApolloServerPluginLandingPageLocalDefault({ footer: false })],
         context: ({ req }: { req: Request }) => ({ req }),
         formatError: (error) => {
-          // В production скрываем внутренние детали ошибок
           const isInternal =
             error.extensions?.code === 'INTERNAL_SERVER_ERROR' &&
             config.get('app.nodeEnv') === 'production';

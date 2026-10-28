@@ -23,6 +23,9 @@ prisma/migrations/*/migration.sql
 .DS_Store
 Thumbs.db
 
+# Личные заметки
+ARCHITECTURE.md
+
 # Логи
 *.log
 npm-debug.log*

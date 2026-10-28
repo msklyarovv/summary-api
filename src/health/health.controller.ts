@@ -5,11 +5,6 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Используется Docker healthcheck и балансировщиком нагрузки.
-   * 200 OK — всё в порядке.
-   * 503 Service Unavailable — БД недоступна.
-   */
   @Get()
   async check() {
     try {

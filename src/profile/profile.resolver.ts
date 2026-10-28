@@ -36,21 +36,17 @@ export class ProfileResolver {
     return this.profileService.findFirst();
   }
 
-  @Query(() => ProfileStats, { description: 'Статистика просмотров (in-memory → Redis следующий шаг)' })
+  @Query(() => ProfileStats, { description: 'Статистика просмотров' })
   profileStats(): ProfileStats {
     return this.statsService.getStats();
   }
 
-  @ResolveField(() => [Link], { description: 'Ссылки на профессиональные ресурсы' })
+  @ResolveField(() => [Link])
   async links(@Parent() profile: PrismaProfile): Promise<PrismaLink[]> {
     return this.prisma.link.findMany({ where: { profileId: profile.id } });
   }
 
-  /**
-   * Фильтр по категории работает в памяти после батч-загрузки DataLoader.
-   * Это не нарушает батчинг: DataLoader уже сделал один SELECT для всех профилей.
-   */
-  @ResolveField(() => [Skill], { description: 'Навыки. Опциональный фильтр: Frontend | Backend | Mobile | DevOps | Testing | Security | Monitoring' })
+  @ResolveField(() => [Skill], { description: 'Опциональный фильтр: Frontend | Backend | Mobile | DevOps | Testing | Security | Monitoring' })
   async skills(
     @Parent() profile: PrismaProfile,
     @Args('category', { nullable: true }) category?: string,
@@ -59,12 +55,12 @@ export class ProfileResolver {
     return category ? skills.filter((s) => s.category === category) : skills;
   }
 
-  @ResolveField(() => [Experience], { description: 'Опыт работы, отсортированный по order' })
+  @ResolveField(() => [Experience])
   experience(@Parent() profile: PrismaProfile): Promise<PrismaExperience[]> {
     return this.experienceLoader.load(profile.id);
   }
 
-  @ResolveField(() => [Project], { description: 'Проекты' })
+  @ResolveField(() => [Project])
   projects(@Parent() profile: PrismaProfile): Promise<PrismaProject[]> {
     return this.projectLoader.load(profile.id);
   }

@@ -1,9 +1,5 @@
 import { Prisma } from '@prisma/client';
 
-/**
- * Единственный источник правды для данных профиля.
- * Используется как SeedService (автозапуск при старте), так и prisma/seed.ts (CLI).
- */
 export const PROFILE_SEED: Prisma.ProfileCreateInput = {
   id: 'main',
   name: 'Михаил Скляров',

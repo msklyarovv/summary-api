@@ -9,14 +9,11 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log'],
   });
 
-  // Корректное завершение: закрывает соединения с БД перед выходом
   app.enableShutdownHooks();
 
   const config = app.get(ConfigService);
   const port = config.get<number>('app.port', 3000);
 
-  // Публичный read-only API — разрешаем любой origin.
-  // Apollo Sandbox iframe шлёт POST с sandbox.embed.apollographql.com.
   app.enableCors({
     origin: true,
     methods: ['GET', 'POST', 'OPTIONS'],
