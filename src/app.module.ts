@@ -32,21 +32,16 @@ import { ComplexityPlugin } from './common/plugins/complexity.plugin';
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const isProd = config.get<string>('app.nodeEnv') === 'production';
-        return {
-          autoSchemaFile: true,
-          sortSchema: true,
-          introspection: config.get<boolean>('app.graphql.introspection', true),
-          // Apollo Server 4 по умолчанию включает CSRF-защиту.
-          // В production она нужна; в dev отключаем, чтобы Apollo Sandbox работал без заголовков.
-          csrfPrevention: isProd,
-          // playground: false отключает старый GraphQL Playground.
-          // Apollo Sandbox (новый) включается автоматически через landing page.
-          playground: false,
-          context: ({ req }: { req: Request }) => ({ req }),
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        autoSchemaFile: true,
+        sortSchema: true,
+        introspection: config.get<boolean>('app.graphql.introspection', true),
+        // Публичный read-only API: CSRF-защита отключена.
+        // Apollo Sandbox требует её отсутствия для работы без дополнительных заголовков.
+        csrfPrevention: false,
+        playground: false,
+        context: ({ req }: { req: Request }) => ({ req }),
+      }),
     }),
 
     PrismaModule,
