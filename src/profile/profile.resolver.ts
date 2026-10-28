@@ -1,10 +1,12 @@
 import { Resolver, Query, ResolveField, Parent, Args } from '@nestjs/graphql';
 import { Profile } from './types/profile.type';
+import { ProfileStats } from './types/profile-stats.type';
 import { Link } from './types/link.type';
 import { Skill } from '../skill/types/skill.type';
 import { Experience } from '../experience/types/experience.type';
 import { Project } from '../project/types/project.type';
 import { ProfileService } from './profile.service';
+import { ProfileStatsService } from './profile-stats.service';
 import { SkillLoader } from '../skill/skill.loader';
 import { ExperienceLoader } from '../experience/experience.loader';
 import { ProjectLoader } from '../project/project.loader';
@@ -21,15 +23,22 @@ import {
 export class ProfileResolver {
   constructor(
     private readonly profileService: ProfileService,
+    private readonly statsService: ProfileStatsService,
     private readonly skillLoader: SkillLoader,
     private readonly experienceLoader: ExperienceLoader,
     private readonly projectLoader: ProjectLoader,
     private readonly prisma: PrismaService,
   ) {}
 
-  @Query(() => Profile, { description: 'Профиль разработчика со всеми связанными данными' })
-  profile(): Promise<PrismaProfile> {
+  @Query(() => Profile, { description: 'Профиль разработчика' })
+  async profile(): Promise<PrismaProfile> {
+    this.statsService.recordView();
     return this.profileService.findFirst();
+  }
+
+  @Query(() => ProfileStats, { description: 'Статистика просмотров (in-memory → Redis следующий шаг)' })
+  profileStats(): ProfileStats {
+    return this.statsService.getStats();
   }
 
   @ResolveField(() => [Link], { description: 'Ссылки на профессиональные ресурсы' })
@@ -38,24 +47,19 @@ export class ProfileResolver {
   }
 
   /**
-   * Навыки с опциональным фильтром по категории.
-   * Фильтрация выполняется в памяти после батч-загрузки —
-   * DataLoader уже сделал один запрос к БД для всех профилей в сессии.
+   * Фильтр по категории работает в памяти после батч-загрузки DataLoader.
+   * Это не нарушает батчинг: DataLoader уже сделал один SELECT для всех профилей.
    */
-  @ResolveField(() => [Skill], { description: 'Список навыков (опционально по категории)' })
+  @ResolveField(() => [Skill], { description: 'Навыки. Опциональный фильтр: Frontend | Backend | Mobile | DevOps | Testing | Security | Monitoring' })
   async skills(
     @Parent() profile: PrismaProfile,
-    @Args('category', {
-      nullable: true,
-      description: 'Фильтр по категории: Frontend, Backend, Mobile, DevOps, Testing, Security, Monitoring',
-    })
-    category?: string,
+    @Args('category', { nullable: true }) category?: string,
   ): Promise<PrismaSkill[]> {
     const skills = await this.skillLoader.load(profile.id);
     return category ? skills.filter((s) => s.category === category) : skills;
   }
 
-  @ResolveField(() => [Experience], { description: 'Опыт работы, сортировка по хронологии' })
+  @ResolveField(() => [Experience], { description: 'Опыт работы, отсортированный по order' })
   experience(@Parent() profile: PrismaProfile): Promise<PrismaExperience[]> {
     return this.experienceLoader.load(profile.id);
   }

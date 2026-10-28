@@ -2,44 +2,30 @@ import { Injectable, Scope } from '@nestjs/common';
 import DataLoader from 'dataloader';
 import { Skill } from '@prisma/client';
 import { SkillService } from './skill.service';
+import { groupBy } from '../common/utils/group-by.util';
 
 /**
- * DataLoader для батч-загрузки навыков по profileId.
+ * DataLoader решает N+1 проблему для навыков.
  *
- * Scope.REQUEST гарантирует, что каждый GraphQL-запрос получает собственный
- * экземпляр загрузчика с чистым кэшем — без утечки данных между запросами.
+ * Scope.REQUEST — каждый GraphQL-запрос получает чистый экземпляр.
+ * Без этого кэш DataLoader может утечь между запросами разных пользователей.
  *
- * Как это работает:
- * Если в одном запросе несколько резолверов вызывают load(profileId),
- * DataLoader группирует вызовы в один батч и делает ровно один SELECT.
+ * Точка роста: добавить cross-request кэширование через Redis
+ * (ICacheService уже абстрагирован в CacheModule).
  */
 @Injectable({ scope: Scope.REQUEST })
 export class SkillLoader {
   private readonly loader: DataLoader<string, Skill[]>;
 
   constructor(private readonly skillService: SkillService) {
-    this.loader = new DataLoader<string, Skill[]>(
-      async (profileIds) => {
-        const skills = await this.skillService.findByProfileIds([...profileIds]);
-        const byProfileId = this.groupBy(skills, 'profileId');
-        return profileIds.map((id) => byProfileId[id] ?? []);
-      },
-      { cache: true },
-    );
+    this.loader = new DataLoader<string, Skill[]>(async (profileIds) => {
+      const skills = await this.skillService.findByProfileIds([...profileIds]);
+      const byProfileId = groupBy(skills, 'profileId');
+      return profileIds.map((id) => byProfileId[id] ?? []);
+    });
   }
 
   load(profileId: string): Promise<Skill[]> {
     return this.loader.load(profileId);
-  }
-
-  private groupBy<T extends Record<string, unknown>>(
-    items: T[],
-    key: keyof T,
-  ): Record<string, T[]> {
-    return items.reduce<Record<string, T[]>>((acc, item) => {
-      const groupKey = String(item[key]);
-      acc[groupKey] = [...(acc[groupKey] ?? []), item];
-      return acc;
-    }, {});
   }
 }

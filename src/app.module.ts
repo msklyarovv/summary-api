@@ -8,6 +8,7 @@ import { appConfig } from './config/app.config';
 import { PrismaModule } from './prisma/prisma.module';
 import { CacheModule } from './common/cache/cache.module';
 import { ProfileModule } from './profile/profile.module';
+import { HealthModule } from './health/health.module';
 import { SeedModule } from './seed/seed.module';
 import { DateTimeScalar } from './common/scalars/date.scalar';
 import { ComplexityPlugin } from './common/plugins/complexity.plugin';
@@ -37,18 +38,26 @@ import { ComplexityPlugin } from './common/plugins/complexity.plugin';
         autoSchemaFile: true,
         sortSchema: true,
         introspection: config.get<boolean>('app.graphql.introspection', true),
-        // Публичный read-only API: CSRF не актуален.
         csrfPrevention: false,
-        // Не ставим playground: false — он добавляет ApolloServerPluginLandingPageDisabled.
-        // Вместо этого явно подключаем встроенный Apollo Sandbox (открывается в браузере).
         plugins: [ApolloServerPluginLandingPageLocalDefault({ footer: false })],
         context: ({ req }: { req: Request }) => ({ req }),
+        formatError: (error) => {
+          // В production скрываем внутренние детали ошибок
+          const isInternal =
+            error.extensions?.code === 'INTERNAL_SERVER_ERROR' &&
+            config.get('app.nodeEnv') === 'production';
+
+          return isInternal
+            ? { message: 'Внутренняя ошибка сервера', extensions: { code: 'INTERNAL_SERVER_ERROR' } }
+            : error;
+        },
       }),
     }),
 
     PrismaModule,
     CacheModule,
     ProfileModule,
+    HealthModule,
     SeedModule,
   ],
   providers: [DateTimeScalar, ComplexityPlugin],

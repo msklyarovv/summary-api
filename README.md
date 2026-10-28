@@ -5,13 +5,12 @@
 ## Быстрый старт
 
 ```bash
-# Запустить всё одной командой (PostgreSQL + API + seed)
 docker-compose up --build
+# Apollo Sandbox: http://localhost:3000/graphql
+# Health check:   http://localhost:3000/health
 ```
 
-После запуска Apollo Sandbox доступен по адресу: **http://localhost:3000/graphql**
-
-### Локальная разработка
+### Локальная разработка без Docker
 
 ```bash
 # 1. Поднять только БД
@@ -20,9 +19,8 @@ docker-compose -f docker-compose.dev.yml up -d
 # 2. Установить зависимости
 npm install
 
-# 3. Применить миграции и заполнить БД
+# 3. Применить миграции
 npx prisma migrate dev
-npx ts-node prisma/seed.ts
 
 # 4. Запустить в watch-режиме
 npm run start:dev
@@ -40,14 +38,8 @@ query {
     description
     email
     telegram
-    links {
-      label
-      url
-    }
-    skills {
-      name
-      category
-    }
+    links { label url }
+    skills { name category }
     experience {
       company
       position
@@ -56,11 +48,7 @@ query {
       achievements
       stack
     }
-    projects {
-      name
-      description
-      url
-    }
+    projects { name description url }
   }
 }
 ```
@@ -70,28 +58,72 @@ query {
 query {
   profile {
     name
-    skills(category: "Frontend") {
-      name
-    }
+    skills(category: "Frontend") { name }
   }
 }
 ```
 
-**Только опыт и проекты:**
+**Статистика просмотров:**
 ```graphql
 query {
-  profile {
-    experience {
-      company
-      position
-      startDate
-    }
-    projects {
-      name
-      url
-    }
+  profileStats {
+    viewCount
+    lastViewedAt
   }
 }
+```
+
+---
+
+## Деплой на VPS
+
+### Подготовка сервера
+
+```bash
+# Установить Docker и Docker Compose
+curl -fsSL https://get.docker.com | sh
+apt-get install -y docker-compose-plugin make git
+
+# Клонировать репозиторий
+git clone https://github.com/msklyarovv/summary-api.git
+cd summary-api
+
+# Создать .env из шаблона
+cp .env.production.example .env
+nano .env  # задать POSTGRES_PASSWORD
+```
+
+### Self-signed SSL (без домена)
+
+```bash
+make ssl-init
+make prod-up
+```
+
+### Let's Encrypt SSL (с доменом)
+
+```bash
+# 1. Прописать домен в nginx/nginx.conf (server_name your-domain.com)
+# 2. Запустить без SSL для подтверждения домена
+#    (раскомментировать блок HTTP-only в nginx.conf)
+make prod-up
+
+# 3. Получить сертификат
+docker run --rm -v certbot_conf:/etc/letsencrypt \
+  -v certbot_www:/var/www/certbot \
+  certbot/certbot certonly --webroot \
+  --webroot-path=/var/www/certbot \
+  -d your-domain.com
+
+# 4. Раскомментировать SSL в nginx.conf, перезапустить nginx
+make prod-up
+```
+
+### Обновление приложения
+
+```bash
+make deploy
+# = git pull + rebuild только api + migrate
 ```
 
 ---
@@ -100,125 +132,116 @@ query {
 
 ### Code First GraphQL
 
-TypeScript-классы с декораторами `@ObjectType` / `@Field` — единственный источник правды.
-Схема генерируется из кода автоматически (`autoSchemaFile: true`).
+TypeScript-классы с декораторами — единственный источник правды для схемы.
+Схема генерируется автоматически (`autoSchemaFile: true`).
 
-**Альтернатива:** Schema First (SDL-файлы) — даёт больший контроль над схемой, но требует синхронизировать SDL и TypeScript вручную. Для личного проекта с одной командой Code First проще в поддержке.
+### DataLoader — решение N+1
 
-### Оптимизация запросов: DataLoader
+Все связанные данные (skills, experience, projects) загружаются через DataLoader с `Scope.REQUEST`.
 
-Все связанные данные (skills, experience, projects) загружаются через **DataLoader** (`Scope.REQUEST`).
-
-**Проблема без DataLoader (N+1):**
+Без DataLoader — N+1 запросов к БД:
 ```
-SELECT * FROM profiles;           -- 1 запрос
-SELECT * FROM skills WHERE profileId = 'a';  -- ещё 1 на каждый профиль
-SELECT * FROM skills WHERE profileId = 'b';
-SELECT * FROM skills WHERE profileId = 'c';
--- Итого: 1 + N запросов
+SELECT * FROM profiles;
+SELECT * FROM skills WHERE profileId = 'a';  -- ×N
 ```
 
-**С DataLoader:**
+С DataLoader — всегда 2 запроса:
 ```
-SELECT * FROM profiles;                         -- 1 запрос
-SELECT * FROM skills WHERE profileId IN (a,b,c); -- 1 батч-запрос
--- Итого: 2 запроса независимо от количества профилей
-```
-
-DataLoader-ы инициализируются per-request (`Scope.REQUEST`) — каждый GraphQL-запрос получает чистый экземпляр без утечки кэша между пользователями.
-
-### Кэш-слой: ICacheService
-
-Введена абстракция `ICacheService` с no-op реализацией `NullCacheService`.
-
-**Точка роста:** реализовать `RedisCacheService` и подменить провайдер в `CacheModule`.
-Бизнес-логика и сервисы не изменятся — только конфигурация DI.
-
-```
-CacheModule
-  providers: [{ provide: ICacheService, useClass: RedisCacheService }]
+SELECT * FROM profiles;
+SELECT * FROM skills WHERE profileId IN ('a', 'b', 'c');
 ```
 
-Это позволило бы кэшировать результат `profile()` с TTL ~60 секунд и снять нагрузку с БД при высоком трафике.
+`Scope.REQUEST` гарантирует, что кэш DataLoader не утекает между запросами пользователей.
 
-### Защита GraphQL API
+### ICacheService — точка роста
 
-**ComplexityPlugin** — ограничивает «стоимость» запроса.
-Настраивается через `GRAPHQL_MAX_COMPLEXITY` (по умолчанию 50).
+Абстракция кэш-слоя готова в `src/common/cache/`.
+Текущая реализация: `NullCacheService` (no-op).
 
-**Точка роста:** разные бюджеты для разных клиентов / API-ключей. Можно логировать сложность в Grafana для анализа трендов.
+**Что нужно для Redis:**
+```typescript
+// src/common/cache/redis-cache.service.ts
+@Injectable()
+export class RedisCacheService implements ICacheService {
+  // реализация через ioredis
+}
 
-**ThrottlerModule** — rate limiting на уровне HTTP (запросов/минуту с одного IP).
+// src/common/cache/cache.module.ts
+providers: [{ provide: ICacheService, useClass: RedisCacheService }]
+```
 
-**Helmet** — security headers: XSS protection, HSTS, referrer policy и т.д.
+Бизнес-логика не меняется. Первый кандидат на кэширование: результат `profile()` с TTL 60 секунд.
 
-### Инициализация БД
+### ProfileStats — in-memory + точка роста
 
-При каждом старте `SeedService` (через `OnApplicationBootstrap`) проверяет наличие данных и заполняет БД, если она пустая. Реализован через `upsert` — идемпотентен, безопасно перезапускать.
+`profileStats` query возвращает счётчик просмотров.
+Хранится в памяти → сбрасывается при рестарте, не масштабируется горизонтально.
 
-В Docker entrypoint сначала выполняются миграции (`prisma migrate deploy`), затем стартует приложение, которое само делает seed.
+**Следующий шаг:** персистировать через `ICacheService` → Redis.
+Дополнительно: аналитика по времени суток, уникальные посетители (по хэшу IP).
 
-**Альтернатива:** вынести seed в отдельный CLI-скрипт (`prisma db seed`) — даёт операторам явный контроль, но усложняет Docker-сетап.
+### Защита API
+
+| Слой | Механизм |
+|---|---|
+| HTTP | Helmet (security headers) |
+| HTTP | CORS (разрешён любой origin — публичный API) |
+| HTTP | ThrottlerModule (rate limit: 100 req/мин) |
+| GraphQL | ComplexityPlugin (лимит сложности запроса, настраивается через env) |
+| Nginx | rate limiting (30 req/sec, burst 20) |
+| Nginx | HTTPS + HSTS |
+| Prod | `formatError` скрывает внутренние детали ошибок |
 
 ### Разделение ответственности
 
 ```
-Resolver     — GraphQL-интерфейс: парсинг аргументов, маппинг в GraphQL-типы
-Service      — бизнес-логика и работа с БД (через Prisma)
-Loader       — батчинг и кэширование DB-запросов (DataLoader)
-PrismaModule — глобальный singleton PrismaClient
-CacheModule  — глобальная абстракция кэша
+Resolver   — GraphQL-интерфейс (аргументы, маппинг типов)
+Service    — бизнес-логика + Prisma
+Loader     — батчинг и кэширование DB-запросов (DataLoader)
 ```
+
+### Инициализация БД
+
+`SeedService` (OnApplicationBootstrap) — идемпотентный автозапуск при старте.
+Данные — единственный источник правды в `src/seed/seed.data.ts`.
+`prisma/seed.ts` — CLI-альтернатива для ручного заполнения.
 
 ### Структура проекта
 
 ```
 src/
-├── config/          # Конфигурация приложения (ConfigModule)
-├── prisma/          # PrismaService (глобальный)
+├── config/           # appConfig — все env переменные
+├── prisma/           # PrismaService (global singleton)
 ├── common/
-│   ├── scalars/     # Кастомный DateTime scalar
-│   ├── plugins/     # ComplexityPlugin
-│   └── cache/       # ICacheService + NullCacheService
-├── profile/         # Профиль: resolver, service, types
-├── skill/           # Навыки: service, loader, types
-├── experience/      # Опыт: service, loader, types
-├── project/         # Проекты: service, loader, types
-└── seed/            # Автозаполнение БД при старте
+│   ├── scalars/      # DateTime scalar
+│   ├── plugins/      # ComplexityPlugin
+│   ├── cache/        # ICacheService + NullCacheService
+│   └── utils/        # groupBy и другие утилиты
+├── profile/          # профиль, resolver, stats
+├── skill/            # навыки: service + DataLoader
+├── experience/       # опыт: service + DataLoader
+├── project/          # проекты: service + DataLoader
+├── health/           # GET /health
+└── seed/             # SeedService + seed.data.ts
+nginx/
+└── nginx.conf        # production reverse proxy
 prisma/
-├── schema.prisma    # Схема БД
-└── seed.ts          # CLI-seed (альтернатива SeedService)
-docker/
-└── entrypoint.sh    # migrate → start
+├── schema.prisma
+├── seed.ts           # CLI seed
+└── migrations/
 ```
 
 ---
 
 ## Переменные окружения
 
-| Переменная | По умолчанию | Описание |
+| Переменная | Значение по умолчанию | Описание |
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection string |
 | `NODE_ENV` | `development` | Режим работы |
 | `PORT` | `3000` | HTTP-порт |
-| `GRAPHQL_INTROSPECTION` | `true` | Включить introspection |
-| `GRAPHQL_MAX_COMPLEXITY` | `50` | Лимит сложности запроса |
+| `GRAPHQL_INTROSPECTION` | `true` | Introspection (в prod рекомендуется `false`) |
+| `GRAPHQL_MAX_COMPLEXITY` | `50` | Лимит сложности GraphQL-запроса |
 | `THROTTLE_TTL` | `60000` | Окно rate limit (мс) |
 | `THROTTLE_LIMIT` | `100` | Макс. запросов за окно |
-
----
-
-## Технологии
-
-| Технология | Версия | Роль |
-|---|---|---|
-| Node.js | 20 LTS | Runtime |
-| TypeScript | 5.x | Типизация |
-| NestJS | 10.x | Фреймворк |
-| GraphQL + Apollo Server | 16.x / 4.x | API |
-| Prisma | 5.x | ORM + миграции |
-| PostgreSQL | 16 | База данных |
-| DataLoader | 2.x | Батчинг DB-запросов |
-| Docker | — | Контейнеризация |
-| Helmet | 8.x | HTTP security headers |
-| NestJS Throttler | 6.x | Rate limiting |
+| `POSTGRES_PASSWORD` | — | Пароль PostgreSQL (обязателен в prod) |

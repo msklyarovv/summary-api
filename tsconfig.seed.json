@@ -3,5 +3,5 @@
   "compilerOptions": {
     "outDir": "./dist-seed"
   },
-  "include": ["prisma/**/*"]
+  "include": ["prisma/**/*", "src/seed/seed.data.ts"]
 }
