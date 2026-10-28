@@ -11,7 +11,14 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
   const port = config.get<number>('app.port', 3000);
-  const nodeEnv = config.get<string>('app.nodeEnv', 'development');
+
+  // Публичный read-only API — разрешаем любой origin.
+  // Apollo Sandbox грузится с sandbox.embed.apollographql.com и шлёт POST сюда.
+  app.enableCors({
+    origin: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-apollo-operation-name', 'apollo-require-preflight'],
+  });
 
   const apolloSandboxHosts = [
     'https://apollo-server-landing-page.cdn.apollographql.com',
@@ -30,18 +37,13 @@ async function bootstrap() {
           styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', ...apolloSandboxHosts],
           fontSrc:     ["'self'", 'https://fonts.gstatic.com', ...apolloSandboxHosts],
           imgSrc:      ["'self'", 'data:', ...apolloSandboxHosts],
-          connectSrc:  ["'self'", ...apolloSandboxHosts],
+          connectSrc:  ["'self'", 'http://localhost:*', ...apolloSandboxHosts],
           manifestSrc: ["'self'", ...apolloSandboxHosts],
           frameSrc:    ["'self'", ...apolloSandboxHosts],
         },
       },
     }),
   );
-
-  app.enableCors({
-    origin: nodeEnv === 'production' ? false : '*',
-    methods: ['GET', 'POST'],
-  });
 
   await app.listen(port);
 
