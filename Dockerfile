@@ -22,8 +22,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Prisma требует OpenSSL для своего query engine
-RUN apk add --no-cache openssl
+# Prisma требует OpenSSL; curl нужен для Docker healthcheck
+RUN apk add --no-cache openssl curl
 
 COPY package*.json ./
 COPY prisma ./prisma/
