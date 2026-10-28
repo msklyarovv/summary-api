@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { appConfig } from './config/app.config';
 import { PrismaModule } from './prisma/prisma.module';
@@ -36,10 +37,11 @@ import { ComplexityPlugin } from './common/plugins/complexity.plugin';
         autoSchemaFile: true,
         sortSchema: true,
         introspection: config.get<boolean>('app.graphql.introspection', true),
-        // Публичный read-only API: CSRF-защита отключена.
-        // Apollo Sandbox требует её отсутствия для работы без дополнительных заголовков.
+        // Публичный read-only API: CSRF не актуален.
         csrfPrevention: false,
-        playground: false,
+        // Не ставим playground: false — он добавляет ApolloServerPluginLandingPageDisabled.
+        // Вместо этого явно подключаем встроенный Apollo Sandbox (открывается в браузере).
+        plugins: [ApolloServerPluginLandingPageLocalDefault({ footer: false })],
         context: ({ req }: { req: Request }) => ({ req }),
       }),
     }),
